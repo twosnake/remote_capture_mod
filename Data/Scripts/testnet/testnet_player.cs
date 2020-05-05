@@ -22,11 +22,11 @@ namespace testnet_player
         public System.Int64 PlayerId;
         public int CountdownTimer;
         public string Faction;
-        public string SpawnPrefab = "PV-4 Buggy"; // "PV-5 Buggy Welder"; <-- can't load by blueprint. Trying making it a prefab and broke the game.
+        public string SpawnPrefab = "PV-5 Buggy Welder"; // "PV-5 Buggy Welder"; <-- can't load by blueprint. Trying making it a prefab and broke the game.
 
         public testnet_spawnrequest(long playerId, string faction)
         {
-            this.CountdownTimer = 2;
+            this.CountdownTimer = 10;
             this.PlayerId = playerId;
             this.Faction = faction;
         }
@@ -38,6 +38,7 @@ namespace testnet_player
     {
         #region constant
 
+        private const string TESTNET_RESOURCE_NODE = "Resource Node";
         private const string TESTNET_BASE = "testnet_base";
         private const string TESTNET_LCD = "testnet_status";
         private const string RED_FACTION = "COR";
@@ -67,7 +68,7 @@ namespace testnet_player
         private Dictionary<string, Sandbox.ModAPI.Ingame.IMyTerminalBlock> spawnerBlock = new Dictionary<string, Sandbox.ModAPI.Ingame.IMyTerminalBlock>();
 
         // block for updating LCD status
-        private Dictionary<string, Sandbox.ModAPI.Ingame.IMyTerminalBlock> spawnerStatusBlock = new Dictionary<string, Sandbox.ModAPI.Ingame.IMyTerminalBlock>();
+        private Dictionary<string, VRage.Game.ModAPI.IMyCubeBlock> spawnerStatusBlock = new Dictionary<string, VRage.Game.ModAPI.IMyCubeBlock>();
 
 
         private Dictionary<string, testnet_spawnrequest> spawnRequests = new Dictionary<string, testnet_spawnrequest>();
@@ -106,10 +107,11 @@ namespace testnet_player
             foreach(string faction in spawnRequests.Keys.ToList()) {
 
                 spawnRequests[faction].CountdownTimer--;
-                Sandbox.Game.MyVisualScriptLogicProvider.SendChatMessage("Spawning vehicle in \""+spawnRequests[faction].CountdownTimer.ToString()+"\"");
+                (spawnerStatusBlock[faction] as IMyTextPanel).WriteText(spawnRequests[faction].CountdownTimer.ToString(), false);
 
                 if (spawnRequests[faction].CountdownTimer < 1) {
-                    Sandbox.Game.MyVisualScriptLogicProvider.SendChatMessage("Spawning vehicle for faction \""+faction+"\" playerId \""+spawnRequests[faction].PlayerId+"\"");
+                    (spawnerStatusBlock[faction] as IMyTextPanel).WriteText("", false);
+//                    Sandbox.Game.MyVisualScriptLogicProvider.SendChatMessage("Spawning vehicle for faction \""+faction+"\" playerId \""+spawnRequests[faction].PlayerId+"\"");
 
                     SpawnPrefab(spawnRequests[faction]);
 
@@ -168,6 +170,8 @@ namespace testnet_player
             isServer = MyAPIGateway.Session.IsServer;
             if (this.isServer)
             {
+                RemoveAllSafeZones();
+
                 MyAPIGateway.Entities.GetEntities(ents);
                 foreach (var ent in ents)
                 {
@@ -186,29 +190,161 @@ namespace testnet_player
                             GridTerminalSystem.GetBlocksOfType<IMySoundBlock>(blocks);
                             foreach(var block in blocks) {
                                 string faction = ((IMyFunctionalBlock)block).GetOwnerFactionTag().ToString();
-                                spawnerBlock.Add(faction, block);
+                                if (!spawnerBlock.ContainsKey(faction)) {
+                                    spawnerBlock.Add(faction, block);
+                                }
                             }
 
                             // Get all LCDs that have the status name on them
-                            blocks = new List<Sandbox.ModAPI.Ingame.IMyTerminalBlock>();
-                            GridTerminalSystem.GetBlocksOfType<IMyTextPanel>(blocks);
-                            foreach(var block in blocks) {
+                            foreach(IMySlimBlock slim in grid.GetBlocks())
+                            {
+                                if (slim.FatBlock == null) {
+                                    continue;
+                                }
 
-                                //TESTNET_LCD
+                                var block = (IMyCubeBlock) slim.FatBlock;
+                                if (block.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_TextPanel" && (block as IMyTerminalBlock).CustomName == TESTNET_LCD) {
 
-                                // can't figure out how to get the name
-                                //Sandbox.Game.MyVisualScriptLogicProvider.SendChatMessage(grid.DisplayName+" - LCD name: "+block.Name+" "+block.CustomName);
-
-                                // string faction = ((IMyFunctionalBlock)block).GetOwnerFactionTag().ToString();
-                                // spawnerStatusBlock.Add(faction, block);
+                                    var lcd = (IMyTextPanel) block;
+                                    lcd.WriteText("", false);
+                                    string faction = ((IMyFunctionalBlock)block).GetOwnerFactionTag().ToString();
+                                    spawnerStatusBlock.Add(faction, block);
+                                }
                             }
+                        }
+
+                        if (grid.DisplayName == TESTNET_RESOURCE_NODE) {
+                            grid.DestructibleBlocks = true;
+                            grid.Editable = true;
+
+                            // change owner and faction
+                            grid.ChangeGridOwnership(0, MyOwnershipShareModeEnum.None);
+                            //block.ChangeOwner(0, MyOwnershipShareModeEnum.None);
+                            //block.ChangeOwner(144115188075855897, MyOwnershipShareModeEnum.Faction);
+
+                            foreach(IMySlimBlock slim in grid.GetBlocks())
+                            {
+                                // change colour all blocks
+                                (grid as IMyCubeGrid).ColorBlocks(slim.Position, slim.Position, testnet_helper.ToHsvColor(VRageMath.Color.White));
+
+                                if (slim.FatBlock == null) {
+                                    continue;
+                                }
+
+                                var block = (IMyCubeBlock) slim.FatBlock;
+                                if (block.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_TextPanel") {
+                                    var lcd = (IMyTextPanel) block;
+                                    var currentImages = new List<string> {""};
+                                    lcd.GetSelectedImages(currentImages);
+                                    lcd.RemoveImagesFromSelection(currentImages);
+
+                                    currentImages.Clear();
+                                    currentImages.Add("Construction");
+                                    lcd.RemoveImagesFromSelection(currentImages);
+                                    lcd.AddImagesToSelection(currentImages, true);
+                                }
+
+                                if (block.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_CargoContainer") {
+                                    CreateRandomLoadout((IMyCargoContainer)block);
+
+                                    try {
+                                        SpawnSafezoneTest((IMyCubeBlock)block);
+                                    } catch(Exception e) {
+                                        debugMessage = e.Message;
+                                    }
+
+                                }
+                            }
+
+                            // // Get all soundblocks that we're using for our "spawner" block for vehicles
+                            // Sandbox.ModAPI.Ingame.IMyGridTerminalSystem GridTerminalSystem = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(grid);
+                            // var blocks = new List<Sandbox.ModAPI.Ingame.IMyTerminalBlock>();
+                            // GridTerminalSystem.GetBlocksOfType<IMySoundBlock>(blocks);
+                            // foreach(var block in blocks) {
+                            //     string faction = ((IMyFunctionalBlock)block).GetOwnerFactionTag().ToString();
+
+                            // }
+
+
+
                         }
                     }
                 }
+
                 ents.Clear();
             }
             getMessageHandler();
         }
+
+        private void SpawnSafezoneTest(IMyCubeBlock spawn)
+        {
+            var offset = spawn.WorldMatrix;
+            offset += MatrixD.CreateFromAxisAngle(offset.Up, testnet_helper.deg2rad(-90));
+            offset += MatrixD.CreateFromAxisAngle(offset.Right, testnet_helper.deg2rad(90));
+
+            var faction = MyAPIGateway.Session.Factions.TryGetFactionByTag("COR");
+            if (faction != null) {
+                var ob = new MyObjectBuilder_SafeZone();
+                ob.PositionAndOrientation = new MyPositionAndOrientation(offset);
+                ob.PersistentFlags = MyPersistentEntityFlags2.InScene;
+                ob.Factions = new long[] { faction.FactionId };
+                ob.AccessTypeFactions = MySafeZoneAccess.Whitelist;
+                ob.Shape = MySafeZoneShape.Sphere;
+                ob.Radius = (float) 30;
+                ob.Enabled = true;
+                ob.DisplayName = "safezone";
+                ob.ModelColor = testnet_helper.ToHsvColor(VRageMath.Color.Red);
+
+                var zone = MyEntities.CreateFromObjectBuilderAndAdd(ob, true);
+            }
+        }
+
+        private void RemoveAllSafeZones()
+        {
+            HashSet<IMyEntity> entity_list = new HashSet<IMyEntity>();
+            MyAPIGateway.Entities.GetEntities(entity_list);
+            int entityDelete = 0;
+            foreach (var entity in entity_list)
+            {
+                if (entity == null || MyAPIGateway.Entities.Exist(entity) == false) {
+                    continue;
+                }
+
+                if (entity as MySafeZone != null)
+                {
+                    entity.Close();
+                }
+            }
+        }
+
+        private void CreateRandomLoadout(IMyCargoContainer cargo)
+        {
+            Sandbox.Game.MyVisualScriptLogicProvider.SendChatMessage(cargo.Name.ToString());
+            // BulletproofGlass
+            // Computer
+            // Construction
+            // Detector
+            // Display
+            // Explosives
+            // Girder
+            // GravityGenerator
+            // InteriorPlate
+            // LargeTube
+            // Medical
+            // MetalGrid
+            // Motor
+            // PowerCell
+            // RadioCommunication
+            // Reactor
+            // SmallTube
+            // SolarCell
+            // SteelPlate
+            // Thrust
+            var itemDefinition = Sandbox.Game.MyVisualScriptLogicProvider.GetDefinitionId("Component", "Computer");
+            Sandbox.Game.MyVisualScriptLogicProvider.AddToInventory(cargo.Name, itemDefinition, 1);
+            // Sandbox.Game.MyVisualScriptLogicProvider.AddToPlayersInventory(0, itemDefinition, 1);
+        }
+
 
         private void getMessageHandler()
         {

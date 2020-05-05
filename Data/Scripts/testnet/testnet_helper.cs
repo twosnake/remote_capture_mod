@@ -34,5 +34,16 @@ namespace testnet_util
         public static int rad2deg(float rad) {
             return (int) (rad * 180 / Math.PI);
         }
+
+        public static Vector3 ToHsvColor(VRageMath.Color color)
+        {
+            var hsvColor = color.ColorToHSV();
+            return new Vector3(hsvColor.X, hsvColor.Y * 2f - 1f, hsvColor.Z * 2f - 1f);
+        }
+
+        public static VRageMath.Color ToColor(Vector3 hsv)
+        {
+            return new Vector3(hsv.X, (hsv.Y + 1f) / 2f, (hsv.Z + 1f) / 2f).HSVtoColor();
+        }
     }
 }
