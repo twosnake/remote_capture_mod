@@ -88,6 +88,8 @@ namespace ConquestGame
             foreach(var vehicleSpawnPoint in VehicleSpawnPoints) {
                 vehicleSpawnPoint.Value.UpdateEachSecond();
             }
+
+            ResourceNodeMgr.UpdateEachSecond();
         }
 
         public void PlayerSpawned(System.Int64 playerId) {
@@ -95,17 +97,10 @@ namespace ConquestGame
             IMyMultiplayer sync = MyAPIGateway.Multiplayer;
             if (IsServer)
             {
-                /*String faction = Sandbox.Game.MyVisualScriptLogicProvider.GetPlayersFactionTag(playerId);
-                if (faction == BLUE_FACTION)
-                {
-                    Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersColorInRGB(playerId, Color.Blue);
-                }
-                else if (faction == RED_FACTION)
-                {
-                    Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersColorInRGB(playerId, Color.Red);
-                }*/
+                var factionTag = Sandbox.Game.MyVisualScriptLogicProvider.GetPlayersFactionTag(playerId);
+                var faction = MyAPIGateway.Session.Factions.TryGetFactionByTag(factionTag);
+                Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersColorInRGB(playerId, ConquestGameModeTeamsFactions.GetFactionColor(faction));
             }
-
         }
     }
 

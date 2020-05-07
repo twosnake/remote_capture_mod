@@ -37,7 +37,7 @@ namespace ConquestGame
             //MyAPIGateway.Session.Factions.TryGetPlayerFaction(playerId);
 
             // get all factions
-            //MyAPIGateway.Session.Factions
+            //MyAPIGateway.Session.Factions\
         }
 
         private void CheckFactionsAreSetupCorrectly() {
@@ -55,6 +55,32 @@ namespace ConquestGame
                 }
             }
         }
+
+        public static VRageMath.Color GetFactionColor(IMyFaction faction) {
+
+            var colorList = new List<VRageMath.Color> {
+                VRageMath.Color.Yellow,
+                VRageMath.Color.Red,
+                VRageMath.Color.Blue,
+                VRageMath.Color.Green,
+                VRageMath.Color.Black
+            };
+
+            var factions = GetFactions().ToList();
+            factions.Sort((pair1,pair2) => pair1.Key.CompareTo(pair2.Key));
+
+            int key = 0;
+            foreach(var fact in factions) {
+                if (faction.Tag == fact.Value.Tag) {
+                    Debug.d("Color key: "+key.ToString());
+                    return colorList[key];
+                }
+                key++;
+            }
+
+            return VRageMath.Color.White;
+        }
+
 
         public static bool isNPC(long playerId) {
             return GetPlayerByID(playerId) == null;
@@ -78,6 +104,16 @@ namespace ConquestGame
 
         public static FactionDict GetFactions() {
             return MyAPIGateway.Session.Factions.Factions;
+        }
+
+        public static long GetNPCPlayerID(IMyFaction faction) {
+            bool hasNPC = false;
+            foreach (var member in faction.Members) {
+                if (isNPC(member.Value.PlayerId)) {
+                    return member.Value.PlayerId;
+                }
+            }
+            return 0;
         }
 
         public FactionDict getListOfPlayerFactions() {

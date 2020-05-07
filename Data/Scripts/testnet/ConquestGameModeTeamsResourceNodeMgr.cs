@@ -47,5 +47,13 @@ namespace ConquestGame
                 }
             }
         }
+
+        public void UpdateEachSecond() {
+
+            foreach(var resourceNode in ResourceNodes) {
+                resourceNode.Value.UpdateEachSecond();
+            }
+
+        }
     }
 }

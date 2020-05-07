@@ -31,7 +31,13 @@ namespace ConquestGame
 
         public ConquestGameModeTeamsVehicleSpawnPoint(IMyFaction faction) {
             Faction = faction;
+
             BaseGrid = getSpawnPointGrid();
+
+            // Change all colors to faction color
+            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+            (BaseGrid as IMyCubeGrid).ColorBlocks( (BaseGrid as IMyCubeGrid).Min,  (BaseGrid as IMyCubeGrid).Max, factionColor);
+
             VehicleSpawnBlocks = getVehicleSpawnBlocks();
             VehicleSpawnButtonBlocks = getVehicleSpawnButtonBlocks();
             SpawnStatusTextPanelBlocks = getSpawnStatusTextPanelBlocks();
@@ -96,8 +102,8 @@ namespace ConquestGame
             }
 
             var offset = spawnBlock.WorldMatrix;
-            offset += MatrixD.CreateFromAxisAngle(offset.Up, ConquestGameHelper.deg2rad(-90));
-            offset += MatrixD.CreateFromAxisAngle(offset.Right, ConquestGameHelper.deg2rad(90));
+            offset += MatrixD.CreateFromAxisAngle(offset.Up, 10);
+            //offset += MatrixD.CreateFromAxisAngle(offset.Right, ConquestGameHelper.deg2rad(90));
 
             var prefab = Sandbox.Definitions.MyDefinitionManager.Static.GetPrefabDefinition(spawnRequest.SpawnPrefab);
             if (prefab == null) {
@@ -120,13 +126,16 @@ namespace ConquestGame
             }
             var entities = new List<IMyEntity>();
             MyAPIGateway.Entities.RemapObjectBuilderCollection(tempList);
+            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+
             foreach(var item in tempList) {
-
                 var entity = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(item);
-                (entity as IMyCubeGrid).ChangeGridOwnership(spawnRequest.PlayerId, MyOwnershipShareModeEnum.Faction);
-                entities.Add(entity);
 
+                (entity as IMyCubeGrid).ChangeGridOwnership(spawnRequest.PlayerId, MyOwnershipShareModeEnum.Faction);
+                (entity as IMyCubeGrid).ColorBlocks( (entity as IMyCubeGrid).Min,  (entity as IMyCubeGrid).Max, factionColor);
+                entities.Add(entity);
             }
+
             MyAPIGateway.Multiplayer.SendEntitiesCreated(tempList);
         }
 
@@ -241,6 +250,7 @@ namespace ConquestGame
 
             var grids = new Dictionary<long, MyCubeGrid>();
             var ents  = new HashSet<IMyEntity>();
+            long npcPlayerId = ConquestGameModeTeamsFactions.GetNPCPlayerID(Faction);
 
             MyAPIGateway.Entities.GetEntities(ents);
             foreach (var ent in ents)
@@ -264,6 +274,14 @@ namespace ConquestGame
                     if (block.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_MedicalRoom" &&
                         ((IMyFunctionalBlock)block).GetOwnerFactionTag() == Faction.Tag) {
                         grids.Add(grid.EntityId, grid);
+                    }
+
+                    // Convert all blocks on grid to shared faction owned by NPC
+                    if (block.GetOwnerFactionTag() == Faction.Tag) {
+                        // Change ownership so everyone can use
+                        if (npcPlayerId != 0) {
+                            (grid as IMyCubeGrid).ChangeGridOwnership(npcPlayerId, MyOwnershipShareModeEnum.Faction);
+                        }
                     }
                 }
             }
