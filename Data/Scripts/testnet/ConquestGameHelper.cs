@@ -52,15 +52,37 @@ namespace ConquestGame
             return (int) (rad * 180 / Math.PI);
         }
 
+        /* uses same function as color picker */
+        public static VRageMath.Color ConvertHexToColor(string hex) {
+            if (hex.Length > 6)
+            {
+                hex = hex.Substring(1);
+            }
+            byte r = byte.Parse(hex.Substring(0, 2), System.Globalization.NumberStyles.HexNumber);
+            byte g = byte.Parse(hex.Substring(2, 2), System.Globalization.NumberStyles.HexNumber);
+            byte b = byte.Parse(hex.Substring(4, 2), System.Globalization.NumberStyles.HexNumber);
+            return new Color((int)r, (int)g, (int)b);
+        }
+
+        public static Vector3 ColorMaskToFriendlyHSV(Vector3 colorMask)
+        {
+            var hsv = MyColorPickerConstants.HSVOffsetToHSV(colorMask);
+            return new Vector3(Math.Round(hsv.X * 360, 1), Math.Round(hsv.Y * 100, 1), Math.Round(hsv.Z * 100, 1));
+        }
+
+        public static Color ColorMaskToRGB(Vector3 colorMask)
+        {
+            return MyColorPickerConstants.HSVOffsetToHSV(colorMask).HSVtoColor();
+        }
+
         public static Vector3 ToHsvColor(VRageMath.Color color)
         {
-            var hsvColor = color.ColorToHSV();
-            return new Vector3(hsvColor.X, hsvColor.Y * 2f - 1f, hsvColor.Z * 2f - 1f);
+            return VRageMath.ColorExtensions.ColorToHSV(color);
         }
 
         public static VRageMath.Color ToColor(Vector3 hsv)
         {
-            return new Vector3(hsv.X, (hsv.Y + 1f) / 2f, (hsv.Z + 1f) / 2f).HSVtoColor();
+            return VRageMath.ColorExtensions.HSVtoColor(hsv);
         }
 
         public static void RemoveAllSafeZones()

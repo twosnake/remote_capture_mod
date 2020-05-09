@@ -22,6 +22,7 @@ namespace ConquestGame
     using GridsDict = Dictionary<long, IMyCubeGrid>;
     using FactionDict = Dictionary<string, IMyFaction>;
     using FactionPointsDict = Dictionary<string, int>;
+    using CargoResourceNodeList = List<ConquestGameModeTeamsResourceNodeSpawning>;
 
     public enum ConquestGameResourceNodeState
     {
@@ -46,6 +47,8 @@ namespace ConquestGame
         private DateTime NextResourceSpawnUpdate = new DateTime();
         private FactionPointsDict FactionsCapturePoints = new FactionPointsDict();
         private ConquestGameResourceNodeState NodeState = ConquestGameResourceNodeState.Neutral;
+        private CargoResourceNodeList CargoResources = new CargoResourceNodeList();
+
 
         public ConquestGameModeTeamsResourceNode(int gridId, MyCubeGrid grid) {
             if (grid == null) {
@@ -57,14 +60,18 @@ namespace ConquestGame
             GridsInSafeZone = new GridsDict();
 
             if (CargoBlocks.Count != 0) {
-
+                // Spawn the safe zone around the first cargo block found
                 var cargoBlock = CargoBlocks.First().Value as IMyCubeBlock;
                 var offset = cargoBlock.WorldMatrix;
+
                 offset += MatrixD.CreateFromAxisAngle(offset.Up, ConquestGameHelper.deg2rad(0));
                 offset += MatrixD.CreateFromAxisAngle(offset.Right, ConquestGameHelper.deg2rad(0));
                 var pos = new MyPositionAndOrientation(offset);
-
                 SafeZone = ConquestGameHelper.CreateSafezone(OPTIONS.ResourceNodeGridName+" "+GridId, pos);
+            }
+
+            foreach(var cargoBlock in CargoBlocks) {
+                CargoResources.Add(new ConquestGameModeTeamsResourceNodeSpawning(GridId, cargoBlock.Value));
             }
         }
 
@@ -195,9 +202,12 @@ namespace ConquestGame
                 return;
             }
 
+            foreach(var cargoResource in CargoResources) {
+                cargoResource.AddMoreResources();
+            }
+
             Debug.d("Spawning more resources");
             NextResourceSpawnUpdate = MyAPIGateway.Session.GameDateTime + TimeSpan.FromSeconds(OPTIONS.NodeResourceSpawnCountdown);
-
         }
 
         private void SafeZoneCaptureLogic() {
@@ -223,7 +233,10 @@ namespace ConquestGame
 
                         string str = "";
                         foreach(var faction in FactionsCapturePoints) {
-                            str += "Faction: "+faction.Key+" "+faction.Value+"\n";
+                            if (faction.Key != FactionsCapturePoints.First().Key) {
+                                str += "\n";
+                            }
+                            str += "Faction: "+faction.Key+" "+faction.Value;
                         }
                         Debug.d(str);
 

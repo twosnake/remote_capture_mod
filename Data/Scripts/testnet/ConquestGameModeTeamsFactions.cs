@@ -72,7 +72,6 @@ namespace ConquestGame
             int key = 0;
             foreach(var fact in factions) {
                 if (faction.Tag == fact.Value.Tag) {
-                    Debug.d("Color key: "+key.ToString());
                     return colorList[key];
                 }
                 key++;
@@ -118,6 +117,10 @@ namespace ConquestGame
 
         public FactionDict getListOfPlayerFactions() {
             return Factions;
+        }
+
+        public static void SetPlayersFaction(long playerId, IMyFaction faction) {
+            Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersFaction(playerId, faction.Tag);
         }
     }
 }

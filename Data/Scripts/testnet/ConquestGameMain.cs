@@ -45,6 +45,9 @@ namespace ConquestGame
         public const ushort NodeResourceLockExpireCountdown = 10;
         // Number of seconds for new resources to spawn in a captured base
         public const ushort NodeResourceSpawnCountdown = 10;
+        public const string FactionColorReplace = "#FF00FF";
+        // quick thing to stop it changing my block colors while debugging
+        public const bool DisableColorReplace = false;
     }
 
     interface IConquestGameMode
@@ -53,119 +56,131 @@ namespace ConquestGame
         void Setup();
         void UpdateEachSecond();
         void PlayerSpawned(System.Int64 playerId);
+        void PlayerDied(System.Int64 playerId);
+        void PlayerConnected(System.Int64 playerId);
         void UnloadData();
     }
 
     [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
     public class ConquestGameMain : MySessionComponentBase
     {
-        private bool isDedicated;
-        private bool isServer;
-        private bool init = false;
-        private bool ready = false;
-        private string serverMessage;
-        private long playerId;
-        private string debugMessage = "", debugMessage2 = "";
+        private bool IsDedicated;
+        private bool IsServer;
+        private bool GameInit = false;
+        private bool GameReady = false;
         private bool hasMessageHandeler = false;
         private DateTime nextUpdate = new DateTime();
+        private string ExceptionMessage = "";
+        private bool GameErrored = false;
 
         private IConquestGameMode GameMode;
 
         public override void UpdateBeforeSimulation()
         {
-            if (!init && MyAPIGateway.Session != null && MyAPIGateway.Session.Player != null && MyAPIGateway.Entities != null)
+            if (!GameInit && MyAPIGateway.Session != null && MyAPIGateway.Session.Player != null && MyAPIGateway.Entities != null)
             {
-                isServer = MyAPIGateway.Session.IsServer;
-                isDedicated = MyAPIGateway.Utilities.IsDedicated;
-                if (isDedicated)
-                {
-                    MyAPIGateway.Utilities.GetObjectiveLine().Title = "Controlpoint Gamemode Dedicated vTest";
-                }
-                else
-                {
-                    MyAPIGateway.Utilities.GetObjectiveLine().Title = "Controlpoint Gamemode";
-                }
+                IsServer = MyAPIGateway.Session.IsServer;
+                IsDedicated = MyAPIGateway.Utilities.IsDedicated;
+
                 MyAPIGateway.Utilities.GetObjectiveLine().Objectives.Clear();
-                MyAPIGateway.Utilities.GetObjectiveLine().Objectives.Add("");
-                MyAPIGateway.Utilities.GetObjectiveLine().Show();
+                MyAPIGateway.Utilities.GetObjectiveLine().Hide();
                 Sandbox.Game.MyVisualScriptLogicProvider.SetQuestlogVisible(false);
-                init = true;
+                Sandbox.Game.MyVisualScriptLogicProvider.SetQuestlogVisibleLocal(false);
+
+                // Sandbox.Game.MyVisualScriptLogicProvider.SetQuestlogVisibleLocal(true);
+
+                // Sandbox.Game.MyVisualScriptLogicProvider.SetQuestlogTitleLocal("foobar", MyAPIGateway.Session.Player.IdentityId);
+                // Sandbox.Game.MyVisualScriptLogicProvider.AddQuestlogDetailLocal("hello", true, true, MyAPIGateway.Session.Player.IdentityId);
+                // Sandbox.Game.MyVisualScriptLogicProvider.AddQuestlogObjective("there", true, true, MyAPIGateway.Session.Player.IdentityId);
+
+                GameInit = true;
             }
 
-            if (init && ready) {
+            if (GameInit && GameReady) {
                 if (MyAPIGateway.Session.GameDateTime > nextUpdate) {
                     nextUpdate = MyAPIGateway.Session.GameDateTime + TimeSpan.FromSeconds(1);
                     updateEachSecond();
                 }
             }
+
+            MyAPIGateway.Session.CameraController.ForceFirstPersonCamera = false;
         }
 
         public void updateEachSecond() {
             try {
                 GameMode.UpdateEachSecond();
             } catch(Exception e) {
-                debugMessage = "Update Exception: "+e.Message;
+                ExceptionMessage = "Update Exception: "+e.Message;
+                GameErrored = true;
             }
         }
 
         public override void Draw()
         {
-            if (init)
+            if (!GameInit && !IsServer && !GameErrored)
             {
-                if (!isServer)
-                {
-                    debugMessage = "";
-                    debugMessage2 = "";
-                }
-
-                MyAPIGateway.Utilities.GetObjectiveLine().Objectives[0] = string.Format(
-                    "\n" +
-                    //getmessage + "\n" +
-                    debugMessage + "\n" +
-                    debugMessage2 + "\n" +
-                    //+ parsemessage +
-                    //"\n" + activeButton +
-                    //"\n" + serverMessage +
-                    "\n".PadRight(232, ' '));
+                return;
             }
+
+            MyAPIGateway.Utilities.GetObjectiveLine().Show();
+            MyAPIGateway.Utilities.GetObjectiveLine().Objectives.Add(string.Format(
+                "\n" +
+                ExceptionMessage + "\n" +
+                "\n".PadRight(232, ' ')));
         }
 
         public override void LoadData()
         {
-
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerDied += PlayerDied;
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerSpawned += PlayerSpawned;
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerConnected += PlayerConnected;
         }
 
         protected override void UnloadData()
         {
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerDied -= PlayerDied;
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerSpawned -= PlayerSpawned;
+            Sandbox.Game.MyVisualScriptLogicProvider.PlayerConnected -= PlayerConnected;
             GameMode.UnloadData();
         }
 
         public override void BeforeStart()
         {
-            bool error = false;
-            isServer = MyAPIGateway.Session.IsServer;
+            IsServer = MyAPIGateway.Session.IsServer;
 
             GameMode = new ConquestGameModeTeams();
-            GameMode.IsServer = isServer;
+            GameMode.IsServer = IsServer;
 
-            if (isServer)
+            if (IsServer)
             {
                 try {
                     GameMode.Setup();
                 } catch(Exception e) {
-                    debugMessage = "Setup Exception: "+e.Message;
-                    error = true;
+                    ExceptionMessage = "Setup Exception: "+e.Message;
+                    GameErrored = true;
                 }
             }
 
-            if (!error) {
-                ready = true;
+            if (!GameErrored) {
+                GameReady = true;
+            }
+        }
+
+        public void PlayerConnected(System.Int64 playerId)
+        {
+            if (GameReady && IsServer) {
+                GameMode.PlayerConnected(playerId);
             }
         }
 
         public void PlayerSpawned(System.Int64 playerId)
         {
             GameMode.PlayerSpawned(playerId);
+        }
+
+        public void PlayerDied(System.Int64 playerId)
+        {
+            GameMode.PlayerDied(playerId);
         }
     }
 }

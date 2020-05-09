@@ -6,7 +6,9 @@ namespace ConquestGame
         public long FactionId  { get; set; }
 
         public ushort CountdownTimer  { get; set; }
+        public bool HasVehicleSpawned  { get; set; }
         public string SpawnPrefab;
+
 
         public ConquestGameModeTeamsSpawnRequest(long playerId, long factionId)
         {
@@ -14,13 +16,14 @@ namespace ConquestGame
             PlayerId = playerId;
             FactionId = factionId;
             SpawnPrefab = OPTIONS.SpawnVehiclePrefab;
+            HasVehicleSpawned = false;
         }
 
         public void Tick() {
             CountdownTimer--;
         }
 
-        public bool IsReady() {
+        public bool CountdownFinished() {
             if (CountdownTimer < 1) {
                 return true;
             }

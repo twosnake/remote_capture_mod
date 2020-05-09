@@ -42,6 +42,7 @@ namespace ConquestGame
 
         public void UnloadData() {
             MyAPIGateway.Multiplayer.UnregisterMessageHandler(OPTIONS.SpawnVehicleRequestHandlerId, MessageHandler);
+            ConquestGameHelper.RemoveAllSafeZones();
         }
 
         private void createMessageHandler()
@@ -92,15 +93,70 @@ namespace ConquestGame
             ResourceNodeMgr.UpdateEachSecond();
         }
 
-        public void PlayerSpawned(System.Int64 playerId) {
+        public void PlayerConnected(System.Int64 playerId) {
+            if (IsServer)
+            {
+                var factionTag = Sandbox.Game.MyVisualScriptLogicProvider.GetPlayersFactionTag(playerId);
+                if (factionTag == "") {
 
-            IMyMultiplayer sync = MyAPIGateway.Multiplayer;
+                    int playerCount = int.MaxValue;
+                    IMyFaction selectedFaction = null;
+
+                    foreach(var faction in FactionMgr.getListOfPlayerFactions()) {
+
+                        if (faction.Value.Members.Count < playerCount) {
+                            selectedFaction = faction.Value;
+                        }
+                    }
+
+                    if (selectedFaction == null) {
+                        // error
+                        return;
+                    }
+                    ConquestGameModeTeamsFactions.SetPlayersFaction(playerId, selectedFaction);
+                }
+
+                SpawnPlayer(playerId);
+            }
+        }
+
+        private void SpawnPlayer(long playerId) {
+
+            // If player is dead spawn them
+            var identity = ConquestGameModeTeamsFactions.GetIdentityById(playerId);
+            if (identity == null) {
+                // error
+                return;
+            }
+
+            var faction = ConquestGameModeTeamsFactions.GetFactionByPlayerId(playerId);
+            if (faction == null) {
+                // error
+                return;
+            }
+
+            if (identity.IsDead) {
+                if (!VehicleSpawnPoints.ContainsKey(faction.FactionId)) {
+                    // error
+                    return;
+                }
+                VehicleSpawnPoints[faction.FactionId].SpawnPlayer(playerId);
+            }
+        }
+
+        public void PlayerSpawned(System.Int64 playerId) {
             if (IsServer)
             {
                 var factionTag = Sandbox.Game.MyVisualScriptLogicProvider.GetPlayersFactionTag(playerId);
                 var faction = MyAPIGateway.Session.Factions.TryGetFactionByTag(factionTag);
-                Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersColorInRGB(playerId, ConquestGameModeTeamsFactions.GetFactionColor(faction));
+                var color = ConquestGameModeTeamsFactions.GetFactionColor(faction);
+                Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersColorInRGB(playerId, color);
             }
+        }
+
+        public void PlayerDied(System.Int64 playerId) {
+            Debug.d(playerId.ToString());
+            SpawnPlayer(playerId);
         }
     }
 

@@ -24,6 +24,7 @@ namespace ConquestGame
     {
         private IMyFaction Faction;
         private MyCubeGrid BaseGrid;
+        private IMyFunctionalBlock MedicalBlock;
         private BlocksDict VehicleSpawnBlocks;
         private BlocksDict VehicleSpawnButtonBlocks;
         private BlocksDict SpawnStatusTextPanelBlocks;
@@ -34,14 +35,38 @@ namespace ConquestGame
 
             BaseGrid = getSpawnPointGrid();
 
-            // Change all colors to faction color
-            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
-            (BaseGrid as IMyCubeGrid).ColorBlocks( (BaseGrid as IMyCubeGrid).Min,  (BaseGrid as IMyCubeGrid).Max, factionColor);
+            if (!OPTIONS.DisableColorReplace) {
+                ColorBaseBuilding();
+            }
 
             VehicleSpawnBlocks = getVehicleSpawnBlocks();
             VehicleSpawnButtonBlocks = getVehicleSpawnButtonBlocks();
             SpawnStatusTextPanelBlocks = getSpawnStatusTextPanelBlocks();
             SpawnRequests = new SpawnRequestDict();
+        }
+
+        public void ColorBaseBuilding() {
+
+            var targetColor = ConquestGameHelper.ToHsvColor(ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace));
+            var targetColorCompare = ConquestGameHelper.ColorMaskToFriendlyHSV(ConquestGameHelper.ColorMaskToRGB(targetColor));
+            // Change all colors to faction color
+            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+
+            foreach(IMySlimBlock slim in BaseGrid.GetBlocks()) {
+
+                var blockColor = slim.ColorMaskHSV;
+                var blockColorCompare  = ConquestGameHelper.ColorMaskToFriendlyHSV(ConquestGameHelper.ColorMaskToRGB(blockColor));
+
+                if (blockColorCompare == targetColorCompare) {
+                    (BaseGrid as IMyCubeGrid).ColorBlocks(slim.Min, slim.Max, factionColor);
+                }
+            }
+        }
+
+        public void SpawnPlayer(long playerId) {
+
+            var matrix = MedicalBlock.WorldMatrix;
+            Sandbox.Game.MyVisualScriptLogicProvider.SpawnPlayer(matrix, new Vector3D(0,0,0), playerId);
         }
 
         public void UpdateEachSecond() {
@@ -76,12 +101,16 @@ namespace ConquestGame
             }
             var spawnRequest = SpawnRequests.First().Value;
 
+            if (!spawnRequest.HasVehicleSpawned) {
+                SpawnPrefab(spawnRequest);
+                spawnRequest.HasVehicleSpawned = true;
+            }
+
             spawnRequest.Tick();
-            if (!spawnRequest.IsReady()) {
+            if (!spawnRequest.CountdownFinished()) {
                 return;
             }
 
-            SpawnPrefab(spawnRequest);
             SpawnRequests.Remove(SpawnRequests.First().Key);
         }
 
@@ -90,7 +119,6 @@ namespace ConquestGame
             if (SpawnRequests.ContainsKey(playerId)) {
                 return;
             }
-
             SpawnRequests.Add(playerId, new ConquestGameModeTeamsSpawnRequest(playerId, factionId));
         }
 
@@ -102,8 +130,8 @@ namespace ConquestGame
             }
 
             var offset = spawnBlock.WorldMatrix;
-            offset += MatrixD.CreateFromAxisAngle(offset.Up, 10);
-            //offset += MatrixD.CreateFromAxisAngle(offset.Right, ConquestGameHelper.deg2rad(90));
+            // move up by one block
+            offset += MatrixD.CreateTranslation(1, 0, 0);
 
             var prefab = Sandbox.Definitions.MyDefinitionManager.Static.GetPrefabDefinition(spawnRequest.SpawnPrefab);
             if (prefab == null) {
@@ -117,11 +145,31 @@ namespace ConquestGame
                 prefab = Sandbox.Definitions.MyDefinitionManager.Static.GetPrefabDefinition(prefab.Id.SubtypeName);
             }
 
+
+            // Get the original position of the prefab and so we can zero out the position
+            Vector3 originalPos = prefab.BoundingBox.Center;
+
             var tempList = new List<MyObjectBuilder_EntityBase>();
             foreach (var grid in prefab.CubeGrids)
             {
                 var gridBuilder = (MyObjectBuilder_CubeGrid) grid.Clone();
-                gridBuilder.PositionAndOrientation = new MyPositionAndOrientation(offset);
+
+               // gridBuilder.CreatePhysics = false;
+                gridBuilder.LinearVelocity = new SerializableVector3(0, 0, 0);
+                gridBuilder.AngularVelocity = new SerializableVector3(0, 0, 0);
+
+
+                // zero out the local coords
+                var localPos = new Vector3D(grid.PositionAndOrientation.Value.Position) - originalPos;
+
+                // add the zerod out coords with the coords of the spawning block
+                var matrix = new MyPositionAndOrientation(
+                    localPos + offset.Translation,
+                    grid.PositionAndOrientation.Value.Forward,
+                    grid.PositionAndOrientation.Value.Up
+                ).GetMatrix();
+                gridBuilder.PositionAndOrientation = new MyPositionAndOrientation(matrix);
+
                 tempList.Add(gridBuilder);
             }
             var entities = new List<IMyEntity>();
@@ -274,6 +322,8 @@ namespace ConquestGame
                     if (block.BlockDefinition.TypeId.ToString() == "MyObjectBuilder_MedicalRoom" &&
                         ((IMyFunctionalBlock)block).GetOwnerFactionTag() == Faction.Tag) {
                         grids.Add(grid.EntityId, grid);
+
+                        MedicalBlock = (IMyFunctionalBlock) block;
                     }
 
                     // Convert all blocks on grid to shared faction owned by NPC
