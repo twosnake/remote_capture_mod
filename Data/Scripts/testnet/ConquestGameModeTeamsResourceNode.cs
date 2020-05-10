@@ -48,6 +48,7 @@ namespace ConquestGame
         private FactionPointsDict FactionsCapturePoints = new FactionPointsDict();
         private ConquestGameResourceNodeState NodeState = ConquestGameResourceNodeState.Neutral;
         private CargoResourceNodeList CargoResources = new CargoResourceNodeList();
+        private List<long> BlocksColored = new List<long>();
 
 
         public ConquestGameModeTeamsResourceNode(int gridId, MyCubeGrid grid) {
@@ -73,7 +74,34 @@ namespace ConquestGame
             foreach(var cargoBlock in CargoBlocks) {
                 CargoResources.Add(new ConquestGameModeTeamsResourceNodeSpawning(GridId, cargoBlock.Value));
             }
+
+            var targetColor  = ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace);
+            var factionColor = ConquestGameHelper.ToHsvColor(VRageMath.Color.Yellow);
+            if (!OPTIONS.DisableColorReplace) {
+                Debug.d("painting");
+                ConquestGameHelper.ReplaceColorOnConnectedGrids(Grid, targetColor, factionColor);
+            }
+
+            // THIS ISN'T WORKING..
+            targetColor  = VRageMath.ColorExtensions.ColorToHSV(ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace));
+            factionColor = ConquestGameHelper.ToHsvColor(VRageMath.Color.Yellow);
+            ConquestGameHelper.ReplaceColorOnConnectedGrids(Grid, factionColor, targetColor, false);
         }
+
+        private void ChangeFaction(IMyFaction faction) {
+
+            var targetColor  = VRageMath.ColorExtensions.ColorToHSV(ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace));
+            if (HasControllingFaction()) {
+                targetColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(ControllingFaction));
+            }
+            // change faction
+            ControllingFaction = faction;
+            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(ControllingFaction));
+            if (!OPTIONS.DisableColorReplace) {
+                ConquestGameHelper.ReplaceColorOnConnectedGrids(Grid, targetColor, factionColor, false);
+            }
+        }
+
 
         public void UpdateEachSecond() {
 
@@ -98,6 +126,7 @@ namespace ConquestGame
 
             switch(state) {
                 case ConquestGameResourceNodeState.Neutral:
+                    ob.Texture = Sandbox.Game.Localization.MySpaceTexts.SafeZone_Texture_Aura.String;
                     if (ControllingFaction != null) {
                         ob.ModelColor = ConquestGameModeTeamsFactions.GetFactionColor(ControllingFaction).ToVector3();
                     } else {
@@ -106,6 +135,7 @@ namespace ConquestGame
                 break;
                 case ConquestGameResourceNodeState.UnderAttack:
                     var faction = GetHighestScoringFaction();
+                    ob.Texture = Sandbox.Game.Localization.MySpaceTexts.SafeZone_Texture_Dots.String;
                     if (faction != null) {
                         ob.ModelColor = ConquestGameModeTeamsFactions.GetFactionColor(faction).ToVector3();
                     } else {
@@ -113,6 +143,8 @@ namespace ConquestGame
                     }
                 break;
                 case ConquestGameResourceNodeState.Locked:
+
+                    ob.Texture = Sandbox.Game.Localization.MySpaceTexts.SafeZone_Texture_Hexagon.String;
                     ob.ModelColor = ConquestGameModeTeamsFactions.GetFactionColor(ControllingFaction).ToVector3();
                 break;
                 default:
@@ -253,7 +285,7 @@ namespace ConquestGame
 
                         if (HasFactionGotHighestScore()) {
                             Debug.d("Locking node resource");
-                            ControllingFaction = GetHighestScoringFaction();
+                            ChangeFaction(GetHighestScoringFaction());
                             NextCaptureGoalUpdate = MyAPIGateway.Session.GameDateTime + TimeSpan.FromSeconds(OPTIONS.NodeResourceLockExpireCountdown);
                             ChangeNodeState(ConquestGameResourceNodeState.Locked);
                         }
@@ -276,6 +308,8 @@ namespace ConquestGame
             FactionsInSafeZone.Clear();
 
             foreach (var grid in GridsInSafeZone) {
+
+                // can be replaced with VRage.Game.ModAPI.IMyCubeGrid.BigOwners
                 var factionTag = ConquestGameHelper.DetermineFactionFromEntityBlocks(grid.Value as MyCubeGrid);
                 if (factionTag == "" || factionTag == null) {
                     continue;

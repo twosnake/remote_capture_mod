@@ -43,6 +43,11 @@ namespace ConquestGame
         public void UnloadData() {
             MyAPIGateway.Multiplayer.UnregisterMessageHandler(OPTIONS.SpawnVehicleRequestHandlerId, MessageHandler);
             ConquestGameHelper.RemoveAllSafeZones();
+
+            foreach(var faction in FactionMgr.getListOfPlayerFactions())
+            {
+                //VehicleSpawnPoints[faction.Key].UnloadData();
+            }
         }
 
         private void createMessageHandler()

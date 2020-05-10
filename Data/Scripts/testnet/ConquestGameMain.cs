@@ -36,15 +36,15 @@ namespace ConquestGame
         // How long new vehicles take to spawn
         public const ushort SpawnTimerCountdown = 10;
         public const string SpawnVehiclePrefab = "PV-5 Buggy Welder";
-        public const string ResourceNodeGridName = "Resource Node";
+        public const string ResourceNodeGridName = "resource_node";
         // Number of seconds to tick by for scoring
         public const ushort NodeResourceScoreTick = 1;
         // Number of points a faction needs to win the node
-        public const ushort NodeResourceScoreWin = 10;
+        public const ushort NodeResourceScoreWin = 3;
         // Number of seconds to keep the node point locked before allowing capture again
-        public const ushort NodeResourceLockExpireCountdown = 10;
+        public const ushort NodeResourceLockExpireCountdown = 3;
         // Number of seconds for new resources to spawn in a captured base
-        public const ushort NodeResourceSpawnCountdown = 10;
+        public const ushort NodeResourceSpawnCountdown = 100;
         public const string FactionColorReplace = "#FF00FF";
         // quick thing to stop it changing my block colors while debugging
         public const bool DisableColorReplace = false;

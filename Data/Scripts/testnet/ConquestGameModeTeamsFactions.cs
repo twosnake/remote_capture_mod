@@ -122,5 +122,6 @@ namespace ConquestGame
         public static void SetPlayersFaction(long playerId, IMyFaction faction) {
             Sandbox.Game.MyVisualScriptLogicProvider.SetPlayersFaction(playerId, faction.Tag);
         }
+//         MySession.Static.Factions.TryGetFactionById(newFaction)
     }
 }

@@ -18,6 +18,7 @@ using SpaceEngineers.Game.ModAPI;
 using Sandbox.Game.Entities;
 using VRage.Game.ModAPI;
 using VRage.Game;
+using VRage.Game.Definitions;
 using VRage.Game.Components;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -38,6 +39,16 @@ namespace ConquestGame
         ConvertToStation = 256,
         All = 511,
         AdminIgnore = 382
+    }
+
+    public struct ColorBlockCoords {
+        public Vector3I Min;
+        public Vector3I Max;
+
+        public ColorBlockCoords(Vector3I min, Vector3I max) {
+            Min = min;
+            Max = max;
+        }
     }
 
     public class ConquestGameHelper
@@ -63,6 +74,61 @@ namespace ConquestGame
             byte b = byte.Parse(hex.Substring(4, 2), System.Globalization.NumberStyles.HexNumber);
             return new Color((int)r, (int)g, (int)b);
         }
+
+        public static void ReplaceColorOnConnectedGrids(MyCubeGrid parentGrid, Vector3 findColor, Vector3 replaceColor, bool convertToFriendly=true)
+        {
+            var grids = GetConnectedGrids(parentGrid);
+            foreach(IMyCubeGrid grid in grids) {
+                var matchingBlocks = FindColor(grid as MyCubeGrid, findColor, convertToFriendly);
+                foreach(var block in matchingBlocks) {
+                    grid.ColorBlocks(block.Position, block.Position, replaceColor);
+                }
+            }
+        }
+
+        public static List<IMyCubeGrid> GetConnectedGrids(MyCubeGrid parentGrid) {
+            Debug.d("parentGrid: "+parentGrid.DisplayName);
+
+            var list = MyAPIGateway.GridGroups.GetGroup(parentGrid,
+                GridLinkTypeEnum.Logical         |
+                GridLinkTypeEnum.Physical        |
+                GridLinkTypeEnum.NoContactDamage |
+                GridLinkTypeEnum.Mechanical
+            );
+
+            Debug.d(list.Count.ToString());
+            return list;
+        }
+
+        public static List<IMySlimBlock> FindColor(MyCubeGrid grid, VRageMath.Color targetColor, bool convertToFriendly=true)
+        {
+            var list = new List<IMySlimBlock>();
+
+            var targetColorHSV = ToHsvColor(targetColor);
+            var targetColorCompare = targetColorHSV;
+            if (convertToFriendly) {
+                targetColorCompare = ColorMaskToFriendlyHSV(ColorMaskToRGB(targetColorHSV));
+            } else {
+                targetColorCompare = ColorMaskToRGB(targetColor);
+            }
+            foreach(IMySlimBlock slim in grid.GetBlocks()) {
+
+                var blockColor = slim.ColorMaskHSV;
+                var blockColorCompare = blockColor;
+
+                if (convertToFriendly) {
+                    blockColorCompare  = ColorMaskToFriendlyHSV(ColorMaskToRGB(blockColor));
+                } else {
+                    blockColorCompare = ColorMaskToRGB(slim.ColorMaskHSV);
+                }
+
+                if (blockColorCompare == targetColorCompare) {
+                    list.Add(slim);
+                }
+            }
+            return list;
+        }
+
 
         public static Vector3 ColorMaskToFriendlyHSV(Vector3 colorMask)
         {
@@ -163,7 +229,6 @@ namespace ConquestGame
             ob.Enabled = true;
             ob.DisplayName = name;
             ob.ModelColor = VRageMath.Color.Transparent.ToVector3();
-
             ob.AllowedActions = CastProhibit(MySessionComponentSafeZones.AllowedActions,
                 MySafeZoneAction.Damage   |
                 MySafeZoneAction.Shooting |
@@ -171,7 +236,6 @@ namespace ConquestGame
                 MySafeZoneAction.Grinding |
                 MySafeZoneAction.LandingGearLock
             );
-
             return MyEntities.CreateFromObjectBuilderAndAdd(ob, true) as MySafeZone;
         }
     }

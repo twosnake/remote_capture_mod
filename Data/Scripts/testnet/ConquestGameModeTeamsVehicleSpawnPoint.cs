@@ -29,6 +29,7 @@ namespace ConquestGame
         private BlocksDict VehicleSpawnButtonBlocks;
         private BlocksDict SpawnStatusTextPanelBlocks;
         private SpawnRequestDict SpawnRequests;
+        private List<long> BlocksColored = new List<long>();
 
         public ConquestGameModeTeamsVehicleSpawnPoint(IMyFaction faction) {
             Faction = faction;
@@ -36,7 +37,9 @@ namespace ConquestGame
             BaseGrid = getSpawnPointGrid();
 
             if (!OPTIONS.DisableColorReplace) {
-                ColorBaseBuilding();
+              //  ColorBaseBuilding();
+            } else {
+                RemoveColorBaseBuilding();
             }
 
             VehicleSpawnBlocks = getVehicleSpawnBlocks();
@@ -45,22 +48,16 @@ namespace ConquestGame
             SpawnRequests = new SpawnRequestDict();
         }
 
-        public void ColorBaseBuilding() {
-
-            var targetColor = ConquestGameHelper.ToHsvColor(ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace));
-            var targetColorCompare = ConquestGameHelper.ColorMaskToFriendlyHSV(ConquestGameHelper.ColorMaskToRGB(targetColor));
-            // Change all colors to faction color
+        public void RemoveColorBaseBuilding() {
+            var targetColor  = VRageMath.ColorExtensions.ColorToHSV(ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace));
             var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+            ConquestGameHelper.ReplaceColorOnConnectedGrids(BaseGrid, factionColor, targetColor, false);
+        }
 
-            foreach(IMySlimBlock slim in BaseGrid.GetBlocks()) {
-
-                var blockColor = slim.ColorMaskHSV;
-                var blockColorCompare  = ConquestGameHelper.ColorMaskToFriendlyHSV(ConquestGameHelper.ColorMaskToRGB(blockColor));
-
-                if (blockColorCompare == targetColorCompare) {
-                    (BaseGrid as IMyCubeGrid).ColorBlocks(slim.Min, slim.Max, factionColor);
-                }
-            }
+        public void ColorBaseBuilding() {
+            var targetColor  = ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace);
+            var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+            ConquestGameHelper.ReplaceColorOnConnectedGrids(BaseGrid, targetColor, factionColor);
         }
 
         public void SpawnPlayer(long playerId) {
@@ -174,16 +171,18 @@ namespace ConquestGame
             }
             var entities = new List<IMyEntity>();
             MyAPIGateway.Entities.RemapObjectBuilderCollection(tempList);
+
             var factionColor = ConquestGameHelper.ToHsvColor(ConquestGameModeTeamsFactions.GetFactionColor(Faction));
+            var targetColor  = ConquestGameHelper.ConvertHexToColor(OPTIONS.FactionColorReplace);
 
             foreach(var item in tempList) {
                 var entity = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(item);
 
                 (entity as IMyCubeGrid).ChangeGridOwnership(spawnRequest.PlayerId, MyOwnershipShareModeEnum.Faction);
-                (entity as IMyCubeGrid).ColorBlocks( (entity as IMyCubeGrid).Min,  (entity as IMyCubeGrid).Max, factionColor);
+                ConquestGameHelper.ReplaceColorOnConnectedGrids((entity as MyCubeGrid), targetColor, factionColor);
+                //(entity as IMyCubeGrid).ColorBlocks( (entity as IMyCubeGrid).Min,  (entity as IMyCubeGrid).Max, factionColor);
                 entities.Add(entity);
             }
-
             MyAPIGateway.Multiplayer.SendEntitiesCreated(tempList);
         }
 
